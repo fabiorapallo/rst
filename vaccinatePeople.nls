@@ -1,0 +1,265 @@
+; v. 20210418 16:00
+;
+;popolation, approximate values with 4350 people: categories for vaccination => * with ** special case
+;
+;shape cylinder (basic people) 2750
+;                               600 students  *
+;                               100 teachers  *
+;                              1550 workers   *
+;                               500 no status *
+;
+;                              within those above, 850 young people > 600 students
+;
+;shape X (fragile people)      1565
+;                               250 workers *
+;                              1315 no status * within them 75 myFragilityRate = 4 (extra fragile **)
+;
+;shape triangle, NH op.          15 *
+;shape star,     HC op.          20 *
+
+extensions [csv]
+globals [firstRow vaccination day distrVacc canRead vaccinationAction countV vaccineActivation 
+        numberOfDaysForImmunityActivation probabilityForTheVaccinatedPersonToBeContagious
+        extraFragileGroup NHoperatorsGroup HCoperatorsGroup teachersGroup fragileWorkersGroup 
+        plainWorkersGroup plainFragilePeopleGroup regularPeopleGroup youngPeopleGroup
+        g1 g2 g3 g4 g5 g6 g7 g1tlist g2tlist g3tlist g4tlist g5tlist g6tlist g7tlist 
+        dailyVaccinations block maxAction action mySet susceptibleList0 susceptibleListV vaccinationDay ii lS]
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+to vaccinatePeople
+  file-close
+  file-open fileVacc 
+  set day 0
+  set distrVacc false
+  set canRead true
+  set vaccination [-1 " "]
+  set vaccinationAction [-1]
+  set vaccineActivation 40
+  set dailyVaccinations 0
+  set block -1
+  set vaccinationDay -1
+  
+  set g1tlist (list g1t1 g1t2 g1t3 g1t4 g1t5)
+  set g2tlist (list g2t1 g2t2 g2t3 g2t4 g2t5)
+  set g3tlist (list g3t1 g3t2 g3t3 g3t4 g3t5)
+  set g4tlist (list g4t1 g4t2 g4t3 g4t4 g4t5)
+  set g5tlist (list g5t1 g5t2 g5t3 g5t4 g5t5)
+  set g6tlist (list g6t1 g6t2 g6t3 g6t4 g6t5)
+  set g7tlist (list g7t1 g7t2 g7t3 g7t4 g7t5)
+  
+  
+  set extraFragileGroup people with [inNursingHome]             ; extrafragile people in nursing homes
+  set NHoperatorsGroup people with [shape = "triangle"]         ; nursing homes operators
+  set HCoperatorsGroup people with [shape = "star"]             ; healtcare operators
+  
+  set teachersGroup people with [teacher]                       ; teachers
+  
+  set fragileWorkersGroup people with [shape = "x" and worker]  ; workers with medical fragility
+  
+  set plainWorkersGroup people with [shape = "cylinder" and
+                                                        worker] ; plain workers
+  
+  set plainFragilePeopleGroup people with [shape = "x" and 
+                              not worker and not inNursingHome] ; fragile people withut special characteristics
+  
+  set regularPeopleGroup people with [shape = "cylinder" 
+                   and not teacher and not young and not worker]; regular people not young not worker not teacher
+  
+  set youngPeopleGroup people with [young and shape != "star"
+                                     and shape != "triangle"]   ; young people excluding special activity cases
+  
+  set g1 (turtle-set extraFragileGroup NHoperatorsGroup HCoperatorsGroup)
+  set g2 turtle-set teachersGroup
+  set g3 turtle-set fragileWorkersGroup
+  set g4 turtle-set plainWorkersGroup 
+  set g5 turtle-set plainFragilePeopleGroup
+  set g6 turtle-set regularPeopleGroup
+  set g7 turtle-set youngPeopleGroup
+    
+  ;show "start" 
+  
+  set firstRow csv:from-row file-read-line
+  set useGA first firstRow
+  set numberOfDaysForImmunityActivation item 1 firstRow
+  set probabilityForTheVaccinatedPersonToBeContagious last firstRow
+  show (word useGA " " numberOfDaysForImmunityActivation " " probabilityForTheVaccinatedPersonToBeContagious)
+  set vaccineActivation numberOfDaysForImmunityActivation
+
+  while [not (last vaccination = "end" and day = first vaccination)]
+         [
+          set day day + 1 
+
+          if canRead  [set vaccination csv:from-row file-read-line 
+                       if first vaccinationAction = -1 [set vaccinationAction but-first vaccination]
+                       if vaccinationDay = -1 [set vaccinationDay first vaccination]
+                      ]
+            
+          if day < first vaccination [set canRead false]
+          if day = first vaccination [show (word "from day " day " the vaccination plan is: " but-first vaccination) 
+                                      set distrVacc true
+                                      set block block + 1
+                                      set canRead true
+                                      set vaccinationAction but-first vaccination]
+
+          if distrVacc and not (file-at-end? and day = first vaccination) [vaccinationProcess]       
+         
+               
+                    
+          ]
+  
+  ask people 
+         [if vaccinationDate > 0   [if random-float 1 < (1 - probabilityForTheVaccinatedPersonToBeContagious) 
+                                                                [set contagiousAfterVaccineActivation false]
+                                   ]
+         ]
+
+
+  ;show "end" 
+  file-close  
+  
+  set susceptibleList0 countSusceptible
+
+  ; assign group numnbers to individuals (at the end of the procedure, to avoid to change the random sequences above)
+  ask g1 [set myGroupForStatistics 1]
+  ask g2 [set myGroupForStatistics 2]
+  ask g3 [set myGroupForStatistics 3]
+  ask g4 [set myGroupForStatistics 4]
+  ask g5 [set myGroupForStatistics 5]
+  ask g6 [set myGroupForStatistics 6]
+  ask g7 [set myGroupForStatistics 7]
+
+end
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+to vaccinationProcess
+  ;show (word "at day " day " apply vaccination plan " vaccinationAction)
+  
+  set dailyVaccinations dailyVaccinations + first vaccinationAction
+  
+  groupVaccination 1 g1 g1tlist
+  groupVaccination 2 g2 g2tlist
+  groupVaccination 3 g3 g3tlist
+  groupVaccination 4 g4 g4tlist
+  groupVaccination 5 g5 g5tlist
+  groupVaccination 6 g6 g6tlist
+  groupVaccination 7 g7 g7tlist
+  
+  
+
+end
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+to haveVaccinatedPeopleComingOut
+  
+  set countV 0
+  
+  repeat populationSize  [
+                          if is-turtle? person countV ; is-turtle? to bypass dead agents
+                                [ask person countV 
+                                   [if vaccinationDate > 0 and ((vaccinationDate + vaccineActivation) = ticks) 
+                                                      [
+                                                       set activeVaccination true
+                                                      ]
+                                   ]]  
+    
+                          set countV countV + 1]
+      
+end
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+to cleanInfections
+
+  set countV 0
+  
+  repeat populationSize  [
+                          if is-turtle? person countV ; is-turtle? to bypass dead agents
+                                [ask person countV 
+                                   [
+              if contagionTick = ticks and is-turtle? person myInfectingAgent
+              [if [activeVaccination] of person myInfectingAgent 
+                [if [not contagiousAfterVaccineActivation] of person myInfectingAgent 
+                                                                                          [;show word "clean contagion at time " ticks  
+                                                                                           set startingInfection 0
+                                                                                           set finishingInfection 0
+                                                                                           set contagionTick 0
+                                                                                           set myInfectingAgent 0
+                                                                                           set myInfectingAgentContagion# 0
+                                                                                           set myInfectingAgentWhereInfectedColor 0
+                                                                                           set myContagion# 0
+                                                                                           set whereInfectedColor 0
+                                                                                           ]              
+                      ]]]]  
+
+                          set countV countV + 1]
+
+end  
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+to groupVaccination [nG g gtlist]
+  if useGA = "n"
+  [
+  set mySet g with [vaccinationDate = 0]
+    if count mySet > 0
+      [set maxAction ceiling (count g * item nG vaccinationAction) ;show item nG vaccinationAction
+      set action min list maxAction dailyVaccinations
+      ;show action
+      ifelse count mySet >= action 
+                            [ask n-of action mySet [set vaccinationDate day]
+                                                    set dailyVaccinations dailyVaccinations - action
+                                                                   ]
+                            [ask mySet             [set vaccinationDate day] 
+                                                   set dailyVaccinations dailyVaccinations - count mySet
+                                                                  ]
+      ]
+  ]
+  
+  if useGA = "y"
+  [
+  set mySet g with [vaccinationDate = 0]
+  ;show (word count g " " count mySet " "day " " block " " item block gtlist)
+    if count mySet > 0
+      [
+      set maxAction ceiling (count g * item block gtlist)
+      set action min list maxAction dailyVaccinations
+      ;show action
+      ifelse count mySet >= action 
+                            [ask n-of action mySet [set vaccinationDate day]
+                                                    set dailyVaccinations dailyVaccinations - action
+                                                                   ]
+                            [ask mySet             [set vaccinationDate day] 
+                                                   set dailyVaccinations dailyVaccinations - count mySet
+                                                                  ]
+      ]
+  ]  
+  
+  
+  ;show dailyVaccinations
+end
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+to-report countSusceptible
+  
+   set lS []
+   set lS lput "g1" lS set lS lput count g1 with [color = gray + 2] lS
+   set lS lput "g2" lS set lS lput count g2 with [color = gray + 2] lS
+   set lS lput "g3" lS set lS lput count g3 with [color = gray + 2] lS
+   set lS lput "g4" lS set lS lput count g4 with [color = gray + 2] lS
+   set lS lput "g5" lS set lS lput count g5 with [color = gray + 2] lS
+   set lS lput "g6" lS set lS lput count g6 with [color = gray + 2] lS
+   set lS lput "g7" lS set lS lput count g7 with [color = gray + 2] lS
+  
+   report lS
+  
+end
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+to-report outSusceptibleList0
+  let llS []
+  set lls lput ls lls
+  report lls
+end
